@@ -1,11 +1,14 @@
 import React from 'react';
 import { XMarkIcon, PrinterIcon, CreditCardIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 
-export default function CheckoutModal({ isOpen, onClose, orderItems, tableId }) {
+export default function CheckoutModal({ isOpen, onClose, orderItems = [], tableId, onCheckout }) {
   if (!isOpen) return null;
 
+  // Add safety check
+  const items = Array.isArray(orderItems) ? orderItems : [];
+
   const getTotalAmount = () => {
-    return orderItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+    return items.reduce((total, item) => total + (item.price * item.quantity), 0);
   };
 
   return (
@@ -23,7 +26,7 @@ export default function CheckoutModal({ isOpen, onClose, orderItems, tableId }) 
         <div className="p-6">
           <h3 className="text-lg font-semibold mb-4">Order Summary</h3>
           <div className="space-y-4 mb-6">
-            {orderItems.map((item) => (
+            {items.map((item) => (
               <div key={item.id} className="flex justify-between items-center">
                 <div>
                   <span className="font-medium">{item.name}</span>

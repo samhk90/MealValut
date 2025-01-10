@@ -20,18 +20,28 @@ export default function Table() {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
 
-  // const updateTableStatus = (tableNumber, newStatus) => {
-  //   setTables(tables.map(table => 
-  //     table.number === tableNumber 
-  //       ? { ...table, status: newStatus }
-  //       : table
-  //   ));
-  //   setIsModalOpen(false);
-  // };
+  const handleTableStatusUpdate = async (tableId, isOccupied) => {
+    try {
+      // Find and update the table in local state
+      const updatedTables = tables.map(table => 
+        table.id === tableId 
+          ? { ...table, is_occupied: isOccupied }
+          : table
+      );
+      
+      // Update the Redux store with new tables data
+      dispatch({ 
+        type: 'table/updateTableStatus', 
+        payload: updatedTables 
+      });
+    } catch (error) {
+      console.error('Failed to update table status:', error);
+    }
+  };
 
   const handleTableClick = (table) => {
     setSelectedTable(table);
-    setIsOrderModalOpen(true);  // Changed from setIsModalOpen to setIsOrderModalOpen
+    setIsOrderModalOpen(true);  // Open modal for both occupied and unoccupied tables
   };
 
   // Update getStatusColor to handle is_occupied boolean
@@ -108,9 +118,10 @@ export default function Table() {
           return (
             <div
               key={table.id}
-              onClick={() => handleTableClick(table)}
+              onClick={() => handleTableClick(table)} // Removed condition, always clickable
               className={`relative bg-white rounded-xl shadow-sm border-2 ${statusColors.border} 
-                hover:shadow-lg transition-all duration-300 transform hover:-translate-y-1 cursor-pointer`}
+                cursor-pointer hover:shadow-lg hover:-translate-y-1
+                transition-all duration-300 transform`}
             >
               {/* Status Badge */}
               <div className={`absolute top-4 right-4 ${statusColors.bg} ${statusColors.text} 
@@ -173,11 +184,12 @@ export default function Table() {
         onClose={() => {
           setIsOrderModalOpen(false);  // Changed from setIsModalOpen
           setSelectedTable(null);
+          // Refresh table data when modal closes
+          if (user?.id) {
+            dispatch(fetchTableData(user.id));
+          }
         }}
-        onUpdateStatus={(status) => {
-          // Handle status update if needed
-          setIsOrderModalOpen(false);
-        }}
+        onUpdateStatus={handleTableStatusUpdate}
         isCreateMode={false}
       />
     </div>

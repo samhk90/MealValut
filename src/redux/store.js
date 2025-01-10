@@ -5,6 +5,7 @@ import authReducer from './features/authSlice';
 import settingsReducer from './features/settingSlice';
 import menuReducer from './features/menuSlice';
 import tableReducer from './features/tableSlice';
+import orderReducer from './features/orderSlice';
 import {
   FLUSH,
   REHYDRATE,
@@ -26,7 +27,8 @@ const rootReducer = combineReducers({
   auth: authReducer,
   settings: settingsReducer,
   menu: menuReducer,
-  table:tableReducer,
+  table: tableReducer,
+  order: orderReducer,
 });
 
 // Wrap root reducer with persistReducer
