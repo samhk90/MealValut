@@ -73,6 +73,17 @@ export default function Table() {
     };
     return colors[status] || colors.available;
   };
+
+  // Add sorting function for tables
+  const sortedTables = React.useMemo(() => {
+    return [...tables].sort((a, b) => {
+        // Convert table_no to numbers for proper numeric sorting
+        const aNum = parseInt(a.table_no);
+        const bNum = parseInt(b.table_no);
+        return aNum - bNum;
+    });
+  }, [tables]);
+
   return (
     <div className="p-6">
       {/* Header Section */}
@@ -113,7 +124,7 @@ export default function Table() {
       {/* Tables Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         
-        {tables.map((table) => {
+        {sortedTables.map((table) => {
           const statusColors = getStatusColor(table.status, table.is_occupied);
           const tableStatus = table.is_occupied ? 'Occupied' : table.status || 'Available';
           

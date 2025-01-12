@@ -9,7 +9,8 @@ export default function CheckoutModal({
     table, 
     currentTableOrder,
     onUpdateStatus,
-    orderDetails 
+    orderDetails,
+    onCheckoutComplete // Add this prop
 }) {
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [amountPaid, setAmountPaid] = useState('');
@@ -27,7 +28,7 @@ export default function CheckoutModal({
         try {
             setLoading(true);
             
-            // 1. Update order with customer details and status
+            // Update order status and customer details
             const { error: orderError } = await supabase
                 .from('orders')
                 .update({
@@ -37,10 +38,18 @@ export default function CheckoutModal({
                     customer_mno: customerDetails.mobile,
                 })
                 .eq('id', currentTableOrder.orderid);
-
+            const {data:ordertable, error: ordererror } = await supabase
+                .from('order_tables')
+                .select('*')
+                .eq('orderid', currentTableOrder.orderid);
+            const { error: tableOrderError } = await supabase
+            .from('table')
+            .update({
+                is_occupied: false,
+            }).eq('id', ordertable[0].tableid);
             if (orderError) throw orderError;
 
-            // 2. Create payment record
+            // Create payment record
             const { error: paymentError } = await supabase
                 .from('payments')
                 .insert({
@@ -53,10 +62,12 @@ export default function CheckoutModal({
 
             if (paymentError) throw paymentError;
 
-            // 3. Update table status
+            // Update table status
             await onUpdateStatus(table.id, false);
 
             alert('Payment processed successfully!');
+            // Call the new callback
+            onCheckoutComplete?.();
             onClose();
 
         } catch (error) {
