@@ -25,29 +25,8 @@ export const fetchTableData = (userid) => async (dispatch) => {
             store:storeid (
                 id,
                 name,
-                companyid
-            ),
-            orders (
-                id,
-                status,
-                order_items (
-                    id,
-                    itemid,
-                    quantity,
-                    price,
-                    total_price,
-                    items (
-                        id,
-                        name,
-                        price,
-                        category
-                    )
-                ),
-                total_amount,
-                created_at
-            )`)
-        .eq('store.companyid',userData.companyid)
-        .order('created_at', { foreignTable: 'orders', ascending: false });
+                companyid)`)
+        .eq('store.companyid',userData.companyid);
         
         if(tableError) throw tableError;
         dispatch(setTables(tableData));
@@ -55,52 +34,6 @@ export const fetchTableData = (userid) => async (dispatch) => {
         dispatch(setError(error.message));
         console.error('Error fetching table data:',error);
     }finally{
-        dispatch(setLoading(false));
-    }
-};
-
-export const fetchTableDataByStore = (storeId) => async (dispatch) => {
-    try {
-        dispatch(setLoading(true));
-        dispatch(clearError());
-        
-        const { data: tableData, error: tableError } = await supabase
-            .from('table')
-            .select(`
-                *,
-                store:storeid (
-                    id,
-                    name,
-                    companyid
-                ),
-                orders (
-                    id,
-                    status,
-                    order_items (
-                        id,
-                        itemid,
-                        quantity,
-                        price,
-                        total_price,
-                        items (
-                            id,
-                            name,
-                            price,
-                            category
-                        )
-                    ),
-                    total_amount,
-                    created_at
-                )`)
-            .eq('storeid', storeId)
-            .order('created_at', { foreignTable: 'orders', ascending: false });
-        
-        if (tableError) throw tableError;
-        dispatch(setTables(tableData));
-    } catch (error) {
-        dispatch(setError(error.message));
-        console.error('Error fetching table data by store:', error);
-    } finally {
         dispatch(setLoading(false));
     }
 };
@@ -173,7 +106,6 @@ export const addTable = (tableData) => async (dispatch) => {
                     id,
                     name,
                     companyid)`)
-
             .eq('storeid', tableData.store);
 
         if (fetchError) throw fetchError;

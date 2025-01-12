@@ -10,6 +10,9 @@ import Dashboard from './components/Dashboard';
 import Layout from './components/Layout';
 import Table from './components/Table';
 import Menu from './components/Menu';
+import Takeaway from './components/Takeaway';
+import Orders from './components/Orders';
+
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
@@ -64,8 +67,10 @@ function App() {
       }>
         <Route index element={<Dashboard />} />
         <Route path="table" element={<Table />} />
+        <Route path="takeaway" element={<Takeaway />} />
         <Route path="settings" element={<Settings />} />
         <Route path="menu" element={<Menu />} />
+        <Route path="orders" element={<Orders />} />
         {/* Add other protected routes here */}
       </Route>
 
