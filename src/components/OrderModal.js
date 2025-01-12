@@ -70,85 +70,69 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
         if (!table?.id) return;
 
         try {
-            // First fetch the most recent order_tables entry for this table
-            const { data: tableOrderData, error: tableOrderError } = await supabase
+            // Fixed query with correct order syntax
+            const { data: orderData, error: orderError } = await supabase
                 .from('order_tables')
                 .select(`
                     tableid,
                     orderid,
                     orders:orderid (
-                        created_at
+                        id,
+                        status,
+                        total_amount,
+                        receipt_no,
+                        tax,
+                        created_at,
+                        order_items (
+                            id,
+                            quantity,
+                            price,
+                            total_price,
+                            items (
+                                id,
+                                name,
+                                price,
+                                category,
+                                storeid
+                            )
+                        )
                     )
                 `)
                 .eq('tableid', table.id)
-                .order('orderid', { ascending: false }) // Fix the order clause
+                .eq('orders.status', 'pending')
+                .order('orderid', { ascending: false }) // Changed order clause
                 .limit(1);
 
-            console.log('Table order data:', tableOrderData);
-
-            if (tableOrderError) throw tableOrderError;
-
-            if (!tableOrderData?.[0]?.orderid) {
-                console.log('No order found for table:', table.id);
+            if (orderError) {
+                console.error('Order fetch error:', orderError);
                 setCurrentTableOrder(null);
                 setOrderItems([]);
                 return;
             }
 
-            // Then fetch the complete order details
-            const { data: orderData, error: orderError } = await supabase
-                .from('orders')
-                .select(`
-                    id,
-                    status,
-                    total_amount,
-                    receipt_no,
-                    tax,
-                    created_at,
-                    order_items (
-                        id,
-                        quantity,
-                        price,
-                        total_price,
-                        items (
-                            id,
-                            name,
-                            price,
-                            category,
-                            storeid
-                        )
-                    )
-                `)
-                .eq('id', tableOrderData[0].orderid)
-                .eq('status', 'pending')
-                .single();
-
-            console.log('Order details:', orderData);
-
-            if (orderError) {
-                if (orderError.code === 'PGRST116') {
-                    console.log('No pending order found');
-                    setCurrentTableOrder(null);
-                    setOrderItems([]);
-                    return;
-                }
-                throw orderError;
+            if (!orderData || orderData.length === 0 || !orderData[0].orders) {
+                console.log('No pending order found for table:', table.id);
+                setCurrentTableOrder(null);
+                setOrderItems([]);
+                return;
             }
 
-            if (orderData) {
-                const formattedOrder = {
-                    orderid: orderData.id,
-                    orders: {
-                        ...orderData,
-                        total_amount: parseFloat(orderData.total_amount || 0),
-                        tax: parseFloat(orderData.tax || 0)
-                    }
-                };
+            const orderInfo = orderData[0];
+            
+            const formattedOrder = {
+                orderid: orderInfo.orders.id,
+                orders: {
+                    ...orderInfo.orders,
+                    total_amount: parseFloat(orderInfo.orders.total_amount || 0),
+                    tax: parseFloat(orderInfo.orders.tax || 0)
+                }
+            };
 
-                setCurrentTableOrder(formattedOrder);
+            setCurrentTableOrder(formattedOrder);
 
-                // Transform order items
-                const existingItems = orderData.order_items?.map(orderItem => ({
+            // Transform order items
+            if (orderInfo.orders.order_items) {
+                const existingItems = orderInfo.orders.order_items.map(orderItem => ({
                     id: orderItem.items.id,
                     name: orderItem.items.name,
                     price: parseFloat(orderItem.items.price || 0),
@@ -156,7 +140,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                     category: orderItem.items.category,
                     storeid: orderItem.items.storeid,
                     total_price: parseFloat(orderItem.total_price || 0)
-                })) || [];
+                }));
 
                 console.log('Setting order items:', existingItems);
                 setOrderItems(existingItems);
@@ -201,15 +185,11 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
     const handlePlaceOrder = async () => {
         if (orderItems.length > 0) {
             try {
-                
                 let orderId;
                 let total_amount = getTotalAmount();
                 const tax = +(total_amount * 0.1).toFixed(2);
                 total_amount = +(total_amount + tax).toFixed(2);
-                const {data:storedata, error:storeError} = await supabase
-                .from('user_store')
-                .select('*')
-                .eq('userid', user.id);
+                
                 // Generate receipt number (timestamp + random number)
                 const receipt_no = Date.now()+Math.floor(Math.random() * 1000);
 
@@ -234,7 +214,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                         .from('order_items')
                         .delete()
                         .eq('orderid', orderId);
-                    
+
                     // Insert new items
                     const { error: itemsError } = await supabase
                         .from('order_items')
@@ -254,7 +234,6 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                     return;
                 } else {
                     // Create new order
-                    
                     const { data: newOrder, error: orderError } = await supabase
                         .from('orders')
                         .insert({
@@ -262,7 +241,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                             total_amount,
                             status: 'pending',
                             completed_at: new Date().toISOString(),
-                            storeid: storedata.storeid,
+                            storeid: table.storeid,
                             userid: user.id,
                             tax,
                             receipt_no: receipt_no // Add receipt number to new order
@@ -280,11 +259,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                             orderid: orderId,
                             tableid: table.id
                         });
-                        const { error: tableError } = await supabase
-                        .from('table')
-                        .update({
-                            is_occupied: true,
-                        }).eq('id', table.id); 
+
                     if (tableOrderError) throw tableOrderError;
                 }
 
@@ -301,12 +276,16 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
 
                 if (itemsError) throw itemsError;
 
-                // Update table status
-                await onUpdateStatus(table.id, true);
+                const {error: updateTableError} = await supabase
+                    .from('table')
+                    .update({
+                        is_occupied: true
+                    })
+                    .eq('id', table.id);
+                    onClose();
                 
                 // Refresh orders
                 await fetchTableOrders();
-                onClose();
             } catch (error) {
                 console.error('Error placing/updating order:', error);
                 alert('Failed to place/update order: ' + error.message);
@@ -314,22 +293,21 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
         }
     };
 
-    // Add this function to calculate order details
     const getOrderDetails = () => {
         const subtotal = getTotalAmount();
         const tax = +(subtotal * 0.1).toFixed(2);
         const total_amount = +(subtotal + tax).toFixed(2);
 
         return {
-            subtotal,
-            tax,
-            total_amount,
+            order_type: isTakeaway ? 'takeaway' : 'dine-in',
+            total_amount: total_amount,
+            tax: tax,
+            subtotal: subtotal,
             items: orderItems
         };
     };
 
     const handleCheckoutComplete = () => {
-        // Close both modals and reset states
         setIsCheckoutOpen(false);
         onClose();
     };
@@ -338,8 +316,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
         console.log('OrderModal useEffect:', { isOpen, table, isTakeaway, existingOrder });
         const initializeOrder = async () => {
             if (isOpen) {
-                await getItems();
-                await getCategories();
+                await Promise.all([getItems(), getCategories()]);
                 if (existingOrder) {
                     console.log('Using existing order:', existingOrder);
                     setCurrentTableOrder({
@@ -356,23 +333,18 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
         initializeOrder();
     }, [isOpen, existingOrder, table, isTakeaway]);
 
-    // Add console log to debug category selection
+    // Add cleanup effect
     useEffect(() => {
-        console.log('Selected Category:', selectedCategory);
-        console.log('Items:', items);
-    }, [selectedCategory, items]);
+        return () => {
+            setCurrentTableOrder(null);
+            setOrderItems([]);
+        };
+    }, []);
 
-    // Fix the filter function
-    const filteredItems = items.filter(item => {
-        console.log('Filtering item:', {
-            item,
-            selectedCategory,
-            itemCategory: item.categoryid,
-            match: selectedCategory === 'all' || item.category.id === selectedCategory
-        });
-        
-        return selectedCategory === 'all' || item.category.id === selectedCategory;
-    });
+    // Add filtered items function
+    const filteredItems = items.filter(item => 
+        selectedCategory === 'all' || item.category?.id === selectedCategory
+    );
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -387,159 +359,148 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                     </button>
                 </div>
 
-                <div className="flex flex-col h-[calc(90vh-9rem)]">
-                    <div className="flex flex-1 min-h-0">
-                        {/* Left Side - Menu */}
-                        <div className="flex-1 p-4 border-r overflow-y-auto">
+                <div className="flex h-[calc(90vh-9rem)]">
+                    {/* Left Side - Menu */}
+                    <div className="flex-1 p-4 border-r overflow-y-auto">
+                        <div className="mb-4">
                             {/* Category Filter */}
-                            <div className="mb-4">
-                                <div className="flex flex-wrap gap-2 mb-6">
+                            <div className="flex flex-wrap gap-2 mb-6">
+                                <button
+                                    onClick={() => setSelectedCategory('all')}
+                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200
+                                        ${selectedCategory === 'all'
+                                            ? 'bg-green-500 text-white shadow-md'
+                                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                                >
+                                    All
+                                </button>
+                                {categories.map(category => (
                                     <button
-                                        onClick={() => {
-                                            console.log('Setting category to all');
-                                            setSelectedCategory('all');
-                                        }}
+                                        key={category.id}
+                                        onClick={() => setSelectedCategory(category.id)}
                                         className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200
-                                            ${selectedCategory === 'all'
+                                            ${selectedCategory === category.id
                                                 ? 'bg-green-500 text-white shadow-md'
                                                 : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
                                     >
-                                        All
+                                        {category.name}
                                     </button>
-                                    {categories.map(category => (
-                                        <button
-                                            key={category.id}
-                                            onClick={() => {
-                                                console.log('Setting category to:', category.id);
-                                                setSelectedCategory(category.id);
-                                            }}
-                                            className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200
-                                                ${selectedCategory === category.id
-                                                    ? 'bg-green-500 text-white shadow-md'
-                                                    : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
-                                        >
-                                            {category.name}
-                                        </button>
-                                    ))}
-                                </div>
-                                
-                                {/* Add debug info */}
-                                <div className="text-sm text-gray-500 mb-2">
-                                    Showing {filteredItems.length} items
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {filteredItems.map(item => (
-                                        <div key={item.id} className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-all duration-300">
-                                            <div>
-                                                <h4 className="text-xl font-bold text-gray-800">{item.name}</h4>
-                                                <p className="text-sm text-gray-600">${item.price}</p>
-                                                <div className="flex gap-2 mt-2">
-                                                    <span className="text-xs bg-gray-100 px-2 py-1 rounded">
-                                                        {item.categoryName}
-                                                    </span>
-                                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                                        {item.storeName}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <button
-                                                onClick={() => addToOrder(item)}
-                                                className="mt-4 bg-green-500 text-white p-2 rounded-full hover:bg-green-600 float-right"
-                                            >
-                                                <PlusIcon className="h-5 w-5" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Side - Order Summary */}
-                        <div className="w-96 border-l flex flex-col">
-                            <div className="p-4 border-b">
-                                <h3 className="text-lg font-semibold">Order Summary</h3>
-                            </div>
-                            <div className="flex-1 overflow-y-auto p-4">
-                                {orderItems.map(item => (
-                                    <div key={item.id} className="flex items-center justify-between mb-4">
-                                        <div className="flex-1">
-                                            <h4 className="font-medium">{item.name}</h4>
-                                            <p className="text-sm text-gray-600">${item.price * item.quantity}</p>
-                                        </div>
-                                        <div className="flex items-center space-x-2">
-                                            <button
-                                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                                className="p-1 hover:bg-gray-100 rounded"
-                                            >
-                                                <MinusIcon className="h-4 w-4" />
-                                            </button>
-                                            <span className="w-8 text-center">{item.quantity}</span>
-                                            <button
-                                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                                className="p-1 hover:bg-gray-100 rounded"
-                                            >
-                                                <PlusIcon className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                onClick={() => updateQuantity(item.id, 0)}
-                                                className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                            >
-                                                <TrashIcon className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
                                 ))}
                             </div>
 
-                            <div className="p-4 border-t">
-                                <div className="flex justify-between mb-4">
-                                    <span className="font-semibold">Total Amount:</span>
-                                    <span className="font-semibold">
-                                        ${(currentTableOrder?.orders?.total_amount || getTotalAmount()).toFixed(2)}
-                                    </span>
-                                </div>
-                                <div className="space-y-2">
-                                    <button 
-                                        disabled={orderItems.length === 0}
-                                        onClick={handlePlaceOrder}
-                                        className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600"
-                                    >
-                                        {currentTableOrder ? 'Update Order' : 'Place Order'}
-                                    </button>
-                                    <button 
-                                        onClick={() => setIsCheckoutOpen(true)}
-                                        className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
-                                    >
-                                        Proceed to Checkout
-                                    </button>
-                                    <button 
-                                        onClick={onClose}
-                                        className="w-full bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                            {/* Menu Items Grid */}
+                            <h3 className="text-lg font-semibold mb-2">Menu Items</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {filteredItems.map(item => (
+                                    <div key={item.id} className="border rounded-lg p-3 flex justify-between items-center">
+                                        <div>
+                                            <h4 className="font-medium">{item.name}</h4>
+                                            <p className="text-sm text-gray-600">${item.price}</p>
+                                            <div className="flex gap-2">
+                                                <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                                    {item.categoryName}
+                                                </span>
+                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                                    {item.storeName}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => addToOrder(item)}
+                                            className="bg-green-500 text-white p-2 rounded-full hover:bg-green-600"
                                         >
-                                            Close
+                                            <PlusIcon className="h-5 w-5" />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Side - Order Summary */}
+                    <div className="w-96 border-l flex flex-col">
+                        <div className="p-4 border-b">
+                            <h3 className="text-lg font-semibold">Order Summary</h3>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-4">
+                            {orderItems.map(item => (
+                                <div key={item.id} className="flex items-center justify-between mb-4">
+                                    <div className="flex-1">
+                                        <h4 className="font-medium">{item.name}</h4>
+                                        <p className="text-sm text-gray-600">${item.price * item.quantity}</p>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <button
+                                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                            className="p-1 hover:bg-gray-100 rounded"
+                                        >
+                                            <MinusIcon className="h-4 w-4" />
+                                        </button>
+                                        <span className="w-8 text-center">{item.quantity}</span>
+                                        <button
+                                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                            className="p-1 hover:bg-gray-100 rounded"
+                                        >
+                                            <PlusIcon className="h-4 w-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => updateQuantity(item.id, 0)}
+                                            className="p-1 text-red-500 hover:bg-red-50 rounded"
+                                        >
+                                            <TrashIcon className="h-4 w-4" />
                                         </button>
                                     </div>
                                 </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 border-t">
+                            <div className="flex justify-between mb-4">
+                                <span className="font-semibold">Total Amount:</span>
+                                <span className="font-semibold">
+                                    ${(currentTableOrder?.orders?.total_amount || getTotalAmount()).toFixed(2)}
+                                </span>
+                            </div>
+                            <div className="space-y-2">
+                                <button 
+                                    disabled={orderItems.length === 0}
+                                    onClick={handlePlaceOrder}
+                                    className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600"
+                                >
+                                    {currentTableOrder ? 'Update Order' : 'Place Order'}
+                                </button>
+                                <button 
+                                    onClick={() => setIsCheckoutOpen(true)}
+                                    className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
+                                >
+                                    Proceed to Checkout
+                                </button>
+                                <button 
+                                    onClick={onClose}
+                                    className="w-full bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
                             </div>
                         </div>
-    
-                        {/* Checkout Modal */}
-                        {isCheckoutOpen && (
-                            <CheckoutModal
-                                isOpen={isCheckoutOpen}
-                                onClose={() => setIsCheckoutOpen(false)}
-                                orderItems={orderItems}
-                                table={table}
-                                currentTableOrder={currentTableOrder}
-                                onUpdateStatus={onUpdateStatus}
-                                orderDetails={getOrderDetails()} // Add this line
-                                onCheckoutComplete={handleCheckoutComplete} // Add this prop
-                            />
-                        )}
                     </div>
+    
+                    {/* Checkout Modal */}
+                    {isCheckoutOpen && (
+                        <CheckoutModal
+                            isOpen={isCheckoutOpen}
+                            onClose={() => setIsCheckoutOpen(false)}
+                            orderItems={orderItems}
+                            table={table}
+                            currentTableOrder={currentTableOrder}
+                            onUpdateStatus={onUpdateStatus}
+                            orderDetails={getOrderDetails()}
+                            onCheckoutComplete={handleCheckoutComplete}
+                        />
+                    )}
                 </div>
             </div>
-      
+
     );
 }

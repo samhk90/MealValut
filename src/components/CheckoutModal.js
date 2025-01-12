@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { XMarkIcon, PrinterIcon, CreditCardIcon, BanknotesIcon } from '@heroicons/react/24/outline';
 import { supabase } from './SupabaseClient';
 
@@ -10,7 +10,7 @@ export default function CheckoutModal({
     currentTableOrder,
     onUpdateStatus,
     orderDetails,
-    onCheckoutComplete // Add this prop
+    onCheckoutComplete
 }) {
     const [paymentMethod, setPaymentMethod] = useState('cash');
     const [amountPaid, setAmountPaid] = useState('');
@@ -20,6 +20,54 @@ export default function CheckoutModal({
         mobile: ''
     });
     const [loading, setLoading] = useState(false);
+    const [previousOrderItems, setPreviousOrderItems] = useState([]);
+
+    useEffect(() => {
+        const fetchPreviousOrder = async () => {
+            if (currentTableOrder?.orderid) {
+                try {
+                    const { data, error } = await supabase
+                        .from('orders')
+                        .select(`
+                            id,
+                            status,
+                            total_amount,
+                            receipt_no,
+                            tax,
+                            created_at,
+                            order_items (
+                                id,
+                                quantity,
+                                price,
+                                total_price,
+                                items (
+                                    id,
+                                    name,
+                                    price,
+                                    category,
+                                    storeid
+                                )
+                            )
+                        `)
+                        .eq('id', currentTableOrder.orderid)
+                        .eq('status', 'pending')
+                        .single();
+
+                    if (error) throw error;
+                    if (data) {
+                        setPreviousOrderItems(data.order_items || []);
+                        // You might want to update other state values here based on the fetched data
+                    }
+                } catch (error) {
+                    console.error('Error fetching previous order:', error);
+                }
+            }
+        };
+
+        if (isOpen) {
+            fetchPreviousOrder();
+        }
+    }, [isOpen, currentTableOrder?.orderid]);
 
     const totalAmount = orderDetails.total_amount + orderDetails.tax;
     const changeDue = amountPaid ? (parseFloat(amountPaid) - totalAmount).toFixed(2) : '0.00';
@@ -38,15 +86,26 @@ export default function CheckoutModal({
                     customer_mno: customerDetails.mobile,
                 })
                 .eq('id', currentTableOrder.orderid);
-            const {data:ordertable, error: ordererror } = await supabase
-                .from('order_tables')
-                .select('*')
-                .eq('orderid', currentTableOrder.orderid);
-            const { error: tableOrderError } = await supabase
-            .from('table')
-            .update({
-                is_occupied: false,
-            }).eq('id', ordertable[0].tableid);
+
+            // Only update table status for dine-in orders
+            if (orderDetails.order_type === 'dine-in') {
+                const {data:ordertable, error: ordererror } = await supabase
+                    .from('order_tables')
+                    .select('*')
+                    .eq('orderid', currentTableOrder.orderid);
+                const { error: tableOrderError } = await supabase
+                    .from('table')
+                    .update({
+                        is_occupied: false,
+                    }).eq('id', ordertable[0].tableid);
+                    const { error: tableUpdateError } = await supabase
+                    .from('table')
+                    .update({
+                        is_occupied: false,
+                    }).eq('id', ordertable[0].tableid);
+                if (tableUpdateError) throw tableUpdateError;
+            }
+            
             if (orderError) throw orderError;
 
             // Create payment record
@@ -61,9 +120,7 @@ export default function CheckoutModal({
                 });
 
             if (paymentError) throw paymentError;
-
             // Update table status
-            await onUpdateStatus(table.id, false);
 
             alert('Payment processed successfully!');
             // Call the new callback
@@ -89,6 +146,22 @@ export default function CheckoutModal({
                         <XMarkIcon className="h-6 w-6" />
                     </button>
                 </div>
+
+                {/* Previous Order Items */}
+                {previousOrderItems.length > 0 && (
+                    <div className="mb-6">
+                        <h3 className="text-lg font-medium mb-2">Previous Order Items</h3>
+                        <div className="space-y-2">
+                            {previousOrderItems.map((item) => (
+                                <div key={item.id} className="flex justify-between items-center">
+                                    <span>{item.items.name}</span>
+                                    <span>x{item.quantity}</span>
+                                    <span>${item.total_price}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Customer Details */}
                 <div className="space-y-4 mb-6">
