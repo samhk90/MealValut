@@ -100,9 +100,9 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                 `)
                 .eq('tableid', table.id)
                 .eq('orders.status', 'pending')
-                .order('orderid', { ascending: false }) // Changed order clause
+                .order('orderid', { ascending: true }) // Changed order clause
                 .limit(1);
-
+                    console.log('Order data sami:', orderData);
             if (orderError) {
                 console.error('Order fetch error:', orderError);
                 setCurrentTableOrder(null);
@@ -112,6 +112,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
 
             if (!orderData || orderData.length === 0 || !orderData[0].orders) {
                 console.log('No pending order found for table:', table.id);
+                console.log('Order data:', orderData.id);
                 setCurrentTableOrder(null);
                 setOrderItems([]);
                 return;
@@ -336,6 +337,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
     // Add cleanup effect
     useEffect(() => {
         return () => {
+            handlePlaceOrder();
             setCurrentTableOrder(null);
             setOrderItems([]);
         };
