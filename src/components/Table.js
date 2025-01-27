@@ -1,12 +1,13 @@
 import React, { useState,useEffect } from 'react';
 import { ClockIcon, UserGroupIcon, PlusIcon } from '@heroicons/react/24/outline';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import OrderModal from './OrderModal';
 import TableModal from './TableModal';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchTableData } from '../redux/actions/tableActions'; 
 export default function Table() {
   const location = useLocation();
+  const navigate = useNavigate();
   const {user}=useSelector((state)=>state.auth);
   const {userData,tables,loading,error}=useSelector((state)=>state.table);
   const dispatch=useDispatch();
@@ -41,9 +42,7 @@ export default function Table() {
   };
 
   const handleTableClick = (table) => {
-    console.log('Table clicked:', table);
-    setSelectedTable(table);
-    setIsOrderModalOpen(true);
+    navigate(`/order/${table.id}`);
   };
 
   // Update getStatusColor to handle is_occupied boolean
@@ -191,22 +190,6 @@ export default function Table() {
           setIsCreateModalOpen(false);
         }}
       />
-      {isOrderModalOpen && (
-        <OrderModal
-          table={selectedTable}
-          isOpen={isOrderModalOpen}
-          onClose={() => {
-            console.log('Closing OrderModal');
-            setIsOrderModalOpen(false);
-            setSelectedTable(null);
-            // Refresh table data when modal closes
-            if (user?.id) {
-              dispatch(fetchTableData(user.id));
-            }
-          }}
-          onUpdateStatus={handleTableStatusUpdate}
-        />
-      )}
     </div>
   );
 }

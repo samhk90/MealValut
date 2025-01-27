@@ -10,6 +10,7 @@ export const fetchTableData = (userid) => async (dispatch) => {
         .select('*')
         .eq('id',userid)
         .single();
+        console.log(userData);
         const {data:storeData,error:storeError}=await supabase
         .from('store')
         .select('*')

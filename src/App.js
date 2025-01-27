@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate,useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { supabase } from './components/SupabaseClient';
 import { setUser, clearUser } from './redux/features/authSlice';
@@ -12,6 +12,7 @@ import Table from './components/Table';
 import Menu from './components/Menu';
 import Takeaway from './components/Takeaway';
 import Orders from './components/Orders';
+import OrderModal from './components/OrderModal';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -71,11 +72,15 @@ function App() {
         <Route path="settings" element={<Settings />} />
         <Route path="menu" element={<Menu />} />
         <Route path="orders" element={<Orders />} />
+        <Route path="order/:tableId" element={<OrderModal />} />
         {/* Add other protected routes here */}
       </Route>
-
+      {/* <Route path="/order/:tableId" element={
+        <ProtectedRoute>
+          <OrderModal />
+        </ProtectedRoute>
+      } /> */}
       {/* Catch all route */}
-
     </Routes>
   );
 }

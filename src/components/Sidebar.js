@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import { logoutUser } from '../redux/actions/authActions';
 import {
@@ -7,8 +7,6 @@ import {
   QueueListIcon,
   Cog6ToothIcon,
   ArrowLeftOnRectangleIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
   Bars3Icon,
   XMarkIcon,
   Square2StackIcon,
@@ -26,12 +24,10 @@ const menuItems = [
   { name: 'Settings', icon: Cog6ToothIcon, path: '/settings' }
 ];
 
-const SidebarContent = ({ isCollapsed, handleLogout }) => (
+const SidebarContent = ({ handleLogout }) => (
   <>
-    <div className={`p-6 ${isCollapsed ? 'px-4' : ''}`}>
-      <h1 className={`font-bold text-white transition-all duration-300 ${isCollapsed ? 'text-xl' : 'text-2xl'}`}>
-        {isCollapsed ? 'MV' : 'MealVault'}
-      </h1>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold text-white">MealVault</h1>
     </div>
 
     <nav className="flex-1 px-2">
@@ -41,17 +37,15 @@ const SidebarContent = ({ isCollapsed, handleLogout }) => (
             <NavLink
               to={item.path}
               className={({ isActive }) =>
-                `w-full flex items-center ${isCollapsed ? 'justify-center' : 'justify-start'} 
+                `w-full flex items-center justify-start 
                 px-4 py-3 rounded-lg transition-all duration-200
                 ${isActive 
                   ? 'bg-white text-green-600 shadow-md hover:bg-opacity-90' 
                   : 'text-white hover:bg-white hover:bg-opacity-10'}`
               }
-              data-tooltip-id="sidebar-tooltip"
-              data-tooltip-content={isCollapsed ? item.name : ''}
             >
-              <item.icon className={`h-6 w-6 ${isCollapsed ? '' : 'mr-3'}`} />
-              {!isCollapsed && <span>{item.name}</span>}
+              <item.icon className="h-6 w-6 mr-3" />
+              <span>{item.name}</span>
             </NavLink>
           </li>
         ))}
@@ -61,100 +55,45 @@ const SidebarContent = ({ isCollapsed, handleLogout }) => (
     <div className="p-4 border-t border-white border-opacity-20">
       <button
         onClick={handleLogout}
-        data-tooltip-id="sidebar-tooltip"
-        data-tooltip-content={isCollapsed ? 'Logout' : ''}
-        className={`w-full flex items-center ${isCollapsed ? 'justify-center' : ''} 
-          px-4 py-3 text-white hover:bg-white hover:bg-opacity-10 
-          rounded-lg transition-all duration-200`}
+        className="w-full flex items-center px-4 py-3 text-white hover:bg-white hover:bg-opacity-10 
+          rounded-lg transition-all duration-200"
       >
-        <ArrowLeftOnRectangleIcon className={`h-6 w-6 ${isCollapsed ? '' : 'mr-3'}`} />
-        {!isCollapsed && 'Logout'}
+        <ArrowLeftOnRectangleIcon className="h-6 w-6 mr-3" />
+        Logout
       </button>
     </div>
   </>
 );
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onClose }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   const handleLogout = async () => {
     await dispatch(logoutUser());
     navigate('/login', {replace: true});
   };
 
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-      if (window.innerWidth >= 768) {
-        setIsMobileMenuOpen(false);
-      }
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
-  if (isMobile) {
-    return (
-      <>
-        <button
-          onClick={() => setIsMobileMenuOpen(true)}
-          className="md:hidden fixed right-4 top-4 z-50 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100"
-        >
-          <Bars3Icon className="h-6 w-6 text-green-600" />
-        </button>
-
-        <div 
-          className={`md:hidden fixed inset-0 bg-gray-600 bg-opacity-75 z-40 transition-opacity duration-300 
-            ${isMobileMenuOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} 
-          onClick={() => setIsMobileMenuOpen(false)} 
-        />
-        
-        <div className={`md:hidden fixed right-0 inset-y-0 flex flex-col w-64 bg-gradient-to-br from-green-400 
-          via-emerald-500 to-teal-600 transform transition-transform duration-300 ease-in-out z-50 
-          ${isMobileMenuOpen ? 'translate-x-0' : 'translate-x-full'}`}
-        >
-          <div className="flex items-center justify-between p-4">
-            <h2 className="text-white text-xl font-semibold">Menu</h2>
-            <button
-              onClick={() => setIsMobileMenuOpen(false)}
-              className="text-white hover:text-gray-200"
-            >
-              <XMarkIcon className="h-6 w-6" />
-            </button>
-          </div>
-          <SidebarContent isCollapsed={false} handleLogout={handleLogout} />
-        </div>
-
-        <Tooltip id="sidebar-tooltip" place="right" />
-      </>
-    );
-  }
-
   return (
     <>
-      <div className={`h-screen ${isCollapsed ? 'w-20' : 'w-64'} bg-gradient-to-br from-green-400 
-        via-emerald-500 to-teal-600 flex flex-col shadow-xl transition-all duration-300 
-        ease-in-out relative hidden md:flex`}
-      >
-        <button
-          onClick={() => setIsCollapsed(!isCollapsed)}
-          className="absolute -right-3 top-20 z-50 bg-white rounded-full p-1.5 shadow-lg 
-            hover:bg-gray-100 transition-colors transform hover:scale-105"
-        >
-          {isCollapsed ? (
-            <ChevronRightIcon className="h-4 w-4 text-green-600" />
-          ) : (
-            <ChevronLeftIcon className="h-4 w-4 text-green-600" />
-          )}
-        </button>
+      {/* Modal overlay */}
+      {isOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={onClose} />
+      )}
 
-        <SidebarContent isCollapsed={isCollapsed} handleLogout={handleLogout} />
+      {/* Sidebar */}
+      <div className={`fixed left-0 top-0 h-screen w-64 bg-gradient-to-br from-green-400 
+        via-emerald-500 to-teal-600 transform transition-transform duration-300 ease-in-out z-50
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 text-white hover:text-gray-200"
+        >
+          <XMarkIcon className="h-6 w-6" />
+        </button>
+        <SidebarContent handleLogout={handleLogout} />
       </div>
+
       <Tooltip id="sidebar-tooltip" place="right" />
     </>
   );

@@ -3,19 +3,26 @@ import { XMarkIcon, PlusIcon, MinusIcon, TrashIcon } from '@heroicons/react/24/o
 import CheckoutModal from './CheckoutModal';
 import { useSelector } from 'react-redux';
 import { supabase } from './SupabaseClient';
+import { useParams, useNavigate } from 'react-router-dom';
+import Navbar from './Navbar';
+import Sidebar from './Sidebar';
 
-export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isTakeaway = false, existingOrder = null }) {
+export default function OrderPage({ onUpdateStatus, isTakeaway = false, existingOrder = null }) {
+    const { tableId } = useParams();
+    const navigate = useNavigate();
     // Add new state for categories
     const [categories, setCategories] = useState([]);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [orderItems, setOrderItems] = useState([]);
     const [items, setItems] = useState([]);
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [currentTableOrder, setCurrentTableOrder] = useState(null);
     const user = useSelector((state) => state.auth.user);
+    const [table, setTable] = useState(null);
 
     // Add debug logging
-    console.log('OrderModal rendered:', { table, isOpen });
+    console.log('OrderPage rendered:', { table });
 
     // Fetch items from Supabase
     const getItems = async () => {
@@ -100,8 +107,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                 `)
                 .eq('tableid', table.id)
                 .eq('orders.status', 'pending')
-                .order('orderid', { ascending: true }) // Changed order clause
-                .limit(1);
+                .order('created_at', { ascending: false }) 
                     console.log('Order data sami:', orderData);
             if (orderError) {
                 console.error('Order fetch error:', orderError);
@@ -231,18 +237,19 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
 
                     // Show success message and close modal
                     alert('Order updated successfully!');
-                    onClose();
+                    navigate('/');
                     return;
                 } else {
                     // Create new order
                     const { data: newOrder, error: orderError } = await supabase
                         .from('orders')
                         .insert({
-                            order_type: 'dine-in',
+                            order_type: 'dine in',
                             total_amount,
                             status: 'pending',
                             completed_at: new Date().toISOString(),
                             storeid: table.storeid,
+                            created_at: new Date().toLocaleDateString(),
                             userid: user.id,
                             tax,
                             receipt_no: receipt_no // Add receipt number to new order
@@ -283,7 +290,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                         is_occupied: true
                     })
                     .eq('id', table.id);
-                    onClose();
+                    navigate('/');
                 
                 // Refresh orders
                 await fetchTableOrders();
@@ -310,13 +317,37 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
 
     const handleCheckoutComplete = () => {
         setIsCheckoutOpen(false);
-        onClose();
+        navigate('/');
+    };
+    
+    const handleClose = () => {
+        navigate('/'); // Go back to previous page
+    };
+
+    const fetchTable = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('table')
+                .select('*')
+                .eq('id', tableId)
+                .single();
+
+            if (error) throw error;
+            setTable(data);
+        } catch (error) {
+            console.error('Error fetching table:', error);
+            navigate('/');
+        }
     };
 
     useEffect(() => {
-        console.log('OrderModal useEffect:', { isOpen, table, isTakeaway, existingOrder });
+        fetchTable();
+    }, [tableId]);
+
+    useEffect(() => {
+        console.log('OrderPage useEffect:', { table, isTakeaway, existingOrder });
         const initializeOrder = async () => {
-            if (isOpen) {
+            if (table) {
                 await Promise.all([getItems(), getCategories()]);
                 if (existingOrder) {
                     console.log('Using existing order:', existingOrder);
@@ -332,7 +363,7 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
         };
 
         initializeOrder();
-    }, [isOpen, existingOrder, table, isTakeaway]);
+    }, [existingOrder, table, isTakeaway]);
 
     // Add cleanup effect
     useEffect(() => {
@@ -349,102 +380,121 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
     );
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden">
-                {/* Header */}
-                <div className="p-4 border-b flex justify-between items-center">
-                    <h2 className="text-xl font-semibold">
-                        {isTakeaway ? 'Takeaway Order' : `Table ${table?.table_no}`} - Order Management
-                    </h2>
-                    <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
-                        <XMarkIcon className="h-6 w-6" />
-                    </button>
+        <div className="min-h-screen bg-gray-50">
+            {/* Navbar */}
+            <Navbar onSidebarOpen={() => setIsSidebarOpen(true)}  />
+            {isSidebarOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-40" onClick={() => setIsSidebarOpen(false)} />
+      )}
+      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
+            {/* Modern Fixed Header - Updated styling */}
+            <div className="fixed top-16 left-0 right-0 bg-green-50 shadow-sm z-10">
+                <div className="max-w-8xl mx-auto px-4 py-4">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center space-x-3">
+                            <h2 className="text-xl font-semibold text-gray-800">
+                                {isTakeaway ? 'Takeaway Order' : `Table ${table?.table_no}`}
+                            </h2>
+                            <span className="text-sm px-3 py-1 bg-green-100 text-green-800 rounded-full">
+                                {isTakeaway ? 'Takeaway' : 'Dine-in'}
+                            </span>
+                        </div>
+                        <button 
+                            onClick={handleClose} 
+                            className="p-2 hover:bg-green-100 rounded-full transition-colors"
+                        >
+                            <XMarkIcon className="h-6 w-6 text-gray-600" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="pt-32 h-[calc(100vh-4rem)] flex">
+                {/* Category Sidebar - Fixed height with scroll */}
+                <div className="w-64 bg-white shadow-sm fixed left-0 top-32 bottom-0 overflow-y-auto">
+                    <div className="p-4 space-y-2">
+                        <button
+                            onClick={() => setSelectedCategory('all')}
+                            className={`w-full px-4 py-3 rounded-lg text-left transition-all
+                                ${selectedCategory === 'all'
+                                    ? 'bg-green-500 text-white shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-50'}`}
+                        >
+                            All Categories
+                        </button>
+                        {categories.map(category => (
+                            <button
+                                key={category.id}
+                                onClick={() => setSelectedCategory(category.id)}
+                                className={`w-full px-4 py-3 rounded-lg text-left transition-all
+                                    ${selectedCategory === category.id
+                                        ? 'bg-green-500 text-white shadow-sm'
+                                        : 'text-gray-600 hover:bg-gray-50'}`}
+                            >
+                                {category.name}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                <div className="flex h-[calc(90vh-9rem)]">
-                    {/* Left Side - Menu */}
-                    <div className="flex-1 p-4 border-r overflow-y-auto">
-                        <div className="mb-4">
-                            {/* Category Filter */}
-                            <div className="flex flex-wrap gap-2 mb-6">
-                                <button
-                                    onClick={() => setSelectedCategory('all')}
-                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200
-                                        ${selectedCategory === 'all'
-                                            ? 'bg-green-500 text-white shadow-md'
-                                            : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                {/* Menu Items Grid */}
+                <div className="flex-1 pl-64 pr-96">
+                    <div className="p-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            {filteredItems.map(item => (
+                                <div key={item.id} 
+                                    className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-all border border-gray-100"
                                 >
-                                    All
-                                </button>
-                                {categories.map(category => (
-                                    <button
-                                        key={category.id}
-                                        onClick={() => setSelectedCategory(category.id)}
-                                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200
-                                            ${selectedCategory === category.id
-                                                ? 'bg-green-500 text-white shadow-md'
-                                                : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
-                                    >
-                                        {category.name}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Menu Items Grid */}
-                            <h3 className="text-lg font-semibold mb-2">Menu Items</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {filteredItems.map(item => (
-                                    <div key={item.id} className="border rounded-lg p-3 flex justify-between items-center">
-                                        <div>
-                                            <h4 className="font-medium">{item.name}</h4>
-                                            <p className="text-sm text-gray-600">${item.price}</p>
-                                            <div className="flex gap-2">
-                                                <span className="text-xs bg-gray-100 px-2 py-1 rounded">
+                                    <div className="flex justify-between items-start">
+                                        <div className="flex-1">
+                                            <h4 className="font-medium text-gray-900 mb-1">{item.name}</h4>
+                                            <p className="text-lg font-semibold text-green-600 mb-2">
+                                                ${item.price}
+                                            </p>
+                                            <div className="flex flex-wrap gap-2">
+                                                <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full">
                                                     {item.categoryName}
                                                 </span>
-                                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                                <span className="text-xs px-2 py-1 bg-blue-50 text-blue-600 rounded-full">
                                                     {item.storeName}
                                                 </span>
                                             </div>
                                         </div>
                                         <button
                                             onClick={() => addToOrder(item)}
-                                            className="bg-green-500 text-white p-2 rounded-full hover:bg-green-600"
+                                            className="p-2 text-green-500 hover:bg-green-50 rounded-full transition-colors"
                                         >
-                                            <PlusIcon className="h-5 w-5" />
+                                            <PlusIcon className="h-6 w-6" />
                                         </button>
                                     </div>
-                                ))}
-                            </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
+                </div>
 
-                    {/* Right Side - Order Summary */}
-                    <div className="w-96 border-l flex flex-col">
-                        <div className="p-4 border-b">
-                            <h3 className="text-lg font-semibold">Order Summary</h3>
+                {/* Fixed Order Summary Sidebar - Improved visibility */}
+                <div className="w-96 bg-white fixed right-0 top-32 bottom-0 shadow-lg border-l">
+                    <div className="flex flex-col h-full">
+                        <div className="p-4 border-b bg-gray-50">
+                            <h3 className="text-lg font-semibold text-gray-800">Order Summary</h3>
                         </div>
-                        <div className="flex-1 overflow-y-auto p-4">
+                        
+                        {/* Order Items List - Scrollable */}
+                        <div className="flex-1 overflow-y-auto">
                             {orderItems.map(item => (
-                                <div key={item.id} className="flex items-center justify-between mb-4">
-                                    <div className="flex-1">
-                                        <h4 className="font-medium">{item.name}</h4>
-                                        <p className="text-sm text-gray-600">${item.price * item.quantity}</p>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <button
-                                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                            className="p-1 hover:bg-gray-100 rounded"
-                                        >
-                                            <MinusIcon className="h-4 w-4" />
-                                        </button>
-                                        <span className="w-8 text-center">{item.quantity}</span>
-                                        <button
-                                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                            className="p-1 hover:bg-gray-100 rounded"
-                                        >
-                                            <PlusIcon className="h-4 w-4" />
-                                        </button>
+                                <div key={item.id} 
+                                    className="p-4 border-b hover:bg-gray-50 transition-colors"
+                                >
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <h4 className="font-medium text-gray-900">{item.name}</h4>
+                                            <p className="text-sm text-green-600 font-medium">
+                                                ${(item.price * item.quantity).toFixed(2)}
+                                            </p>
+                                        </div>
                                         <button
                                             onClick={() => updateQuantity(item.id, 0)}
                                             className="p-1 text-red-500 hover:bg-red-50 rounded"
@@ -452,57 +502,76 @@ export default function OrderModal({ table, isOpen, onClose, onUpdateStatus, isT
                                             <TrashIcon className="h-4 w-4" />
                                         </button>
                                     </div>
+                                    <div className="flex items-center justify-end gap-2">
+                                        <button
+                                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                        >
+                                            <MinusIcon className="h-4 w-4" />
+                                        </button>
+                                        <span className="w-8 text-center font-medium">{item.quantity}</span>
+                                        <button
+                                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                            className="p-1 hover:bg-gray-100 rounded text-gray-500"
+                                        >
+                                            <PlusIcon className="h-4 w-4" />
+                                        </button>
+                                    </div>
                                 </div>
                             ))}
                         </div>
 
-                        <div className="p-4 border-t">
-                            <div className="flex justify-between mb-4">
-                                <span className="font-semibold">Total Amount:</span>
-                                <span className="font-semibold">
-                                    ${(currentTableOrder?.orders?.total_amount || getTotalAmount()).toFixed(2)}
+                        {/* Fixed Bottom Section */}
+                        <div className="border-t bg-white p-4">
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="text-gray-600">Subtotal:</span>
+                                <span className="font-medium">${getTotalAmount().toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between items-center mb-4">
+                                <span className="text-gray-600">Tax (10%):</span>
+                                <span className="font-medium">${(getTotalAmount() * 0.1).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between items-center mb-6">
+                                <span className="font-semibold text-gray-800">Total:</span>
+                                <span className="font-bold text-green-600 text-xl">
+                                    ${(getTotalAmount() * 1.1).toFixed(2)}
                                 </span>
                             </div>
-                            <div className="space-y-2">
+                            <div className="space-y-3">
                                 <button 
                                     disabled={orderItems.length === 0}
                                     onClick={handlePlaceOrder}
-                                    className="w-full bg-green-500 text-white py-2 rounded-lg hover:bg-green-600"
+                                    className="w-full bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 
+                                        transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {currentTableOrder ? 'Update Order' : 'Place Order'}
                                 </button>
                                 <button 
                                     onClick={() => setIsCheckoutOpen(true)}
-                                    className="w-full bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600"
+                                    className="w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 
+                                        transition-colors"
                                 >
                                     Proceed to Checkout
                                 </button>
-                                <button 
-                                    onClick={onClose}
-                                    className="w-full bg-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-400"
-                                    >
-                                        Close
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     </div>
-    
-                    {/* Checkout Modal */}
-                    {isCheckoutOpen && (
-                        <CheckoutModal
-                            isOpen={isCheckoutOpen}
-                            onClose={() => setIsCheckoutOpen(false)}
-                            orderItems={orderItems}
-                            table={table}
-                            currentTableOrder={currentTableOrder}
-                            onUpdateStatus={onUpdateStatus}
-                            orderDetails={getOrderDetails()}
-                            onCheckoutComplete={handleCheckoutComplete}
-                        />
-                    )}
                 </div>
             </div>
 
+            {/* Checkout Modal */}
+            {isCheckoutOpen && (
+                <CheckoutModal
+                    isOpen={isCheckoutOpen}
+                    onClose={() => setIsCheckoutOpen(false)}
+                    orderItems={orderItems}
+                    table={table}
+                    currentTableOrder={currentTableOrder}
+                    onUpdateStatus={onUpdateStatus}
+                    orderDetails={getOrderDetails()}
+                    onCheckoutComplete={handleCheckoutComplete}
+                />
+            )}
+        </div>
     );
 }
