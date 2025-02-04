@@ -176,6 +176,15 @@ export default function CheckoutModal({
                 return;
             }
 
+            // For takeaway orders, we use orderDetails.orderId instead of currentTableOrder.orderid
+            const orderId = orderDetails.order_type === 'takeaway' ? 
+                orderDetails.orderId : 
+                currentTableOrder.orderid;
+
+            if (!orderId) {
+                throw new Error('Order ID not found');
+            }
+
             // Update order status and customer details
             const { error: orderError } = await supabase
                 .from('orders')
@@ -185,34 +194,34 @@ export default function CheckoutModal({
                     customer_address: customerDetails.address || '',
                     customer_mno: customerDetails.mobile || '',
                 })
-                .eq('id', currentTableOrder.orderid);
+                .eq('id', orderId);
 
-            // Only update table status for dine-in orders
-            if (orderDetails.order_type === 'dine-in') {
-                const {data:ordertable, error: ordererror } = await supabase
-                    .from('order_tables')
-                    .select('*')
-                    .eq('orderid', currentTableOrder.orderid);
-                const { error: tableOrderError } = await supabase
-                    .from('table')
-                    .update({
-                        is_occupied: false,
-                    }).eq('id', ordertable[0].tableid);
-                    const { error: tableUpdateError } = await supabase
-                    .from('table')
-                    .update({
-                        is_occupied: false,
-                    }).eq('id', ordertable[0].tableid);
-                if (tableUpdateError) throw tableUpdateError;
-            }
-            
             if (orderError) throw orderError;
 
-            // Create payment record with validated numbers
+            // Only update table status for dine-in orders
+            if (orderDetails.order_type === 'dine-in' && currentTableOrder) {
+                const { data: ordertable, error: ordererror } = await supabase
+                    .from('order_tables')
+                    .select('*')
+                    .eq('orderid', orderId);
+
+                if (ordertable && ordertable[0]) {
+                    const { error: tableUpdateError } = await supabase
+                        .from('table')
+                        .update({
+                            is_occupied: false,
+                        })
+                        .eq('id', ordertable[0].tableid);
+
+                    if (tableUpdateError) throw tableUpdateError;
+                }
+            }
+
+            // Create payment record
             const { error: paymentError } = await supabase
                 .from('payments')
                 .insert({
-                    orderid: currentTableOrder.orderid,
+                    orderid: orderId,
                     payment_method: paymentMethod,
                     amount_paid: paidAmount,
                     paid_at: new Date().toISOString(),
@@ -220,10 +229,8 @@ export default function CheckoutModal({
                 });
 
             if (paymentError) throw paymentError;
-            // Update table status
 
             alert('Payment processed successfully!');
-            // Call the new callback
             setIsPrintModalOpen(true);
             await handlePrint();
             navigate('/');

@@ -1,15 +1,25 @@
-import React, { useState,useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ClockIcon, UserGroupIcon, PlusIcon } from '@heroicons/react/24/outline';
 import { useLocation, useNavigate } from 'react-router-dom';
 import OrderModal from './OrderModal';
 import TableModal from './TableModal';
 import { useSelector, useDispatch } from 'react-redux';
 import { fetchTableData } from '../redux/actions/tableActions'; 
+
+// Add these utility functions at the top of the file
+const formatTime = (seconds) => {
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const secs = seconds % 60;
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+};
+
 export default function Table() {
   const location = useLocation();
   const navigate = useNavigate();
   const {user}=useSelector((state)=>state.auth);
   const {userData,tables,loading,error}=useSelector((state)=>state.table);
+
   const dispatch=useDispatch();
   useEffect(()=>{
     if(user?.id){
@@ -21,6 +31,42 @@ export default function Table() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [tableTimers, setTableTimers] = useState({});
+  const timerRefs = React.useRef({}); // Add this to store timer references
+
+  useEffect(() => {
+    // Clear existing timers
+    Object.values(timerRefs.current).forEach(timer => clearInterval(timer));
+    timerRefs.current = {};
+
+    // Initialize timers for occupied tables
+    tables.forEach(table => {
+      if (table.is_occupied) {
+        // Get the start time from the latest order for this table
+        const startTimer = (tableId) => {
+          timerRefs.current[tableId] = setInterval(() => {
+            setTableTimers(prev => ({
+              ...prev,
+              [tableId]: (prev[tableId] || 0) + 1
+            }));
+          }, 1000);
+        };
+
+        startTimer(table.id);
+      } else {
+        // Reset timer for unoccupied tables
+        setTableTimers(prev => ({
+          ...prev,
+          [table.id]: 0
+        }));
+      }
+    });
+
+    // Cleanup function to clear all timers
+    return () => {
+      Object.values(timerRefs.current).forEach(timer => clearInterval(timer));
+    };
+  }, [tables]); // Only re-run when tables change
 
   const handleTableStatusUpdate = async (tableId, isOccupied) => {
     try {
@@ -36,6 +82,19 @@ export default function Table() {
         type: 'table/updateTableStatus', 
         payload: updatedTables 
       });
+
+      // Handle timer when table status changes
+      if (!isOccupied) {
+        // Clear timer when table becomes unoccupied
+        if (timerRefs.current[tableId]) {
+          clearInterval(timerRefs.current[tableId]);
+          delete timerRefs.current[tableId];
+        }
+        setTableTimers(prev => ({
+          ...prev,
+          [tableId]: 0
+        }));
+      }
     } catch (error) {
       console.error('Failed to update table status:', error);
     }
@@ -159,7 +218,9 @@ export default function Table() {
                   </div>
                   <div className="flex items-center text-gray-600">
                     <ClockIcon className="h-5 w-5 mr-3" />
-                    <span>Time: 12:00</span>
+                    <span>
+                      Time: {table.is_occupied ? formatTime(tableTimers[table.id] || 0) : '00:00:00'}
+                    </span>
                   </div>
                 </div>
 

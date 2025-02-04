@@ -14,6 +14,7 @@ import {
   ShoppingBagIcon,
 } from '@heroicons/react/24/outline';
 import { Tooltip } from 'react-tooltip';
+import { clearSelectedStore } from '../redux/actions/storeActions';
 
 const menuItems = [
   { name: 'Dashboard', icon: HomeIcon, path: '/' },
@@ -71,6 +72,8 @@ const Sidebar = ({ isOpen, onClose }) => {
   
   const handleLogout = async () => {
     await dispatch(logoutUser());
+    dispatch({ type: 'CLEAR_STORE' });
+    dispatch(clearSelectedStore());
     navigate('/login', {replace: true});
   };
 

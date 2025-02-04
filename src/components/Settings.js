@@ -7,6 +7,7 @@ import {
   UserIcon, BuildingOffice2Icon, EnvelopeIcon, BriefcaseIcon, BuildingStorefrontIcon,
   PlusIcon, MapPinIcon, CheckCircleIcon
 } from '@heroicons/react/24/outline';
+import SelectedStore from './SelectedStore';
 
 export default function Settings() {
   const dispatch = useDispatch();
@@ -19,6 +20,8 @@ export default function Settings() {
     address: '',
     isActive: false
   });
+  const [isStoreSelectModalOpen, setIsStoreSelectModalOpen] = useState(false);
+
   useEffect(() => {
     if (user?.id) {
       dispatch(fetchUserData(user.id));
@@ -65,6 +68,12 @@ export default function Settings() {
         isActive: false
       });
     }
+  };
+
+  const handleStoreSelect = (store) => {
+    // You can handle the selected store here
+    console.log('Selected store:', store);
+    // Optionally update user's selected store in your state/redux
   };
 
   const renderStores = () => {
@@ -253,13 +262,22 @@ export default function Settings() {
                   <h2 className="text-2xl font-semibold text-gray-900">Store Management</h2>
                   <p className="text-sm text-gray-500 mt-1">Manage your store locations</p>
                 </div>
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  <PlusIcon className="w-5 h-5" />
-                  Add Store
-                </button>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setIsStoreSelectModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    <BuildingStorefrontIcon className="w-5 h-5" />
+                    Select Store
+                  </button>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    <PlusIcon className="w-5 h-5" />
+                    Add Store
+                  </button>
+                </div>
               </div>
               {renderStores()}
             </div>
@@ -319,6 +337,11 @@ export default function Settings() {
               </div>
             </div>
           )}
+          <SelectedStore
+            isOpen={isStoreSelectModalOpen}
+            onClose={() => setIsStoreSelectModalOpen(false)}
+            onSelect={handleStoreSelect}
+          />
         </div>
       </div>
     </div>

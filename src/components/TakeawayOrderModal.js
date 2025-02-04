@@ -18,7 +18,7 @@ export default function TakeawayOrderModal({ onClose, existingOrder = null, onCo
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [currentOrder, setCurrentOrder] = useState(null);
     const user = useSelector((state) => state.auth.user);
-
+    const selectedStore = useSelector((state) => state.store.selectedStore);
 
 
     // Fetch items from Supabase
@@ -51,6 +51,7 @@ export default function TakeawayOrderModal({ onClose, existingOrder = null, onCo
             console.error('Error fetching items:', error.message);
             setItems([]);
         }
+        console.log(selectedStore)
     };
 
     // Add function to fetch categories
@@ -102,53 +103,70 @@ export default function TakeawayOrderModal({ onClose, existingOrder = null, onCo
     const handlePlaceOrder = async () => {
         if (orderItems.length > 0) {
             try {
-                let orderId;
-                let total_amount = getTotalAmount();
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                const total_amount = getTotalAmount();
                 const tax = +(total_amount * 0.1).toFixed(2);
-                total_amount = +(total_amount + tax).toFixed(2);
+                const final_amount = +(total_amount + tax).toFixed(2);
+                const { count: orderCount, error: orderCountError } = await supabase
+                .from('orders')
+                .select('*', { count: 'exact' })
+                .gte('created_at', today.toISOString())
+                .lt('created_at', tomorrow.toISOString());
                 
-                const receipt_no = Date.now() + Math.floor(Math.random() * 1000);
-                console.log(user);
-                const { data: storeData, error: storeError } = await supabase
-                    .from('user_store')
-                    .select('storeid')
-                    .eq('storeid', 'a74b064e-a46d-4e6d-84e6-00be4529a478')
-                    .single();
-                    console.log('storedata: ',storeData);
-                // Create new takeaway order
-                const { data: newOrder, error: orderError } = await supabase
+                const receipt_no = orderCount + 1;
+
+              // Use maybeSingle() instead of single()
+      console.log(selectedStore.id)
+
+
+                // Create new order
+                const { data: orderData, error: orderError } = await supabase
                     .from('orders')
-                    .insert({
-                        order_type: 'take out', // Changed to takeaway
-                        total_amount,
+                    .insert({  // Wrap in array for insert
+                        order_type: 'take out',
+                        total_amount: final_amount,
                         status: 'completed',
-                        created_at: new Date().toLocaleDateString(),
-                        completed_at: new Date().toISOString(),
-                        storeid: storeData.storeid, // Use user's store ID for takeaway
+                        created_at: new Date().toISOString(),
+                        storeid: selectedStore.id,
                         userid: user.id,
                         tax,
-                        receipt_no
+                        receipt_no:receipt_no,
                     })
                     .select()
-                    .single();
+                    .single();  // Use single() after select()
 
-                if (orderError) throw orderError;
-                orderId = newOrder.id;
+                if (orderError) {
+                    throw new Error('Error creating order: ' + orderError.message);
+                }
 
-                // Insert order items
+                if (!orderData) {
+                    throw new Error('Order was not created');
+                }
+
+                // Insert order items with error handling
+                const orderItemsData = orderItems.map(item => ({
+                    orderid: orderData.id,
+                    itemid: item.id,
+                    quantity: item.quantity,
+                    price: +item.price.toFixed(2),
+                    total_price: +(item.price * item.quantity).toFixed(2)
+                }));
+
                 const { error: itemsError } = await supabase
                     .from('order_items')
-                    .insert(orderItems.map(item => ({
-                        orderid: orderId,
-                        itemid: item.id,
-                        quantity: item.quantity,
-                        price: +item.price.toFixed(2),
-                        total_price: +(item.price * item.quantity).toFixed(2)
-                    })));
+                    .insert(orderItemsData);
 
-                if (itemsError) throw itemsError;
+                if (itemsError) {
+                    throw new Error('Error creating order items: ' + itemsError.message);
+                }
 
-                navigate('/');
+                // Set current order and open checkout
+                setCurrentOrder(orderData);
+                setIsCheckoutOpen(true);
 
             } catch (error) {
                 console.error('Error placing takeaway order:', error);
@@ -164,6 +182,7 @@ export default function TakeawayOrderModal({ onClose, existingOrder = null, onCo
 
         return {
             order_type: 'takeaway',
+            orderId: currentOrder?.id,
             total_amount,
             tax,
             subtotal,
@@ -191,15 +210,6 @@ export default function TakeawayOrderModal({ onClose, existingOrder = null, onCo
 
         initializeOrder();
     }, [existingOrder]);
-
-    // Add cleanup effect
-    useEffect(() => {
-        return () => {
-            handlePlaceOrder();
-            setCurrentOrder(null);
-            setOrderItems([]);
-        };
-    }, []);
 
     // Add filtered items function
     const filteredItems = items.filter(item => 

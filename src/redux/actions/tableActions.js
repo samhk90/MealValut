@@ -1,40 +1,47 @@
 import { supabase } from "../../components/SupabaseClient";
-import {setLoading,setTables,setError,setUserData,clearError,setStore} from '../features/tableSlice';
+import { setLoading, setTables, setError, setUserData, clearError, setStore } from '../features/tableSlice';
 
 export const fetchTableData = (userid) => async (dispatch) => {
-    try{
+    try {
         dispatch(setLoading(true));
         dispatch(clearError());
-        const {data:userData,error:userError}=await supabase
-        .from('user')
-        .select('*')
-        .eq('id',userid)
-        .single();
-        console.log(userData);
-        const {data:storeData,error:storeError}=await supabase
-        .from('store')
-        .select('*')
-        .eq('companyid',userData.companyid);
-        if(storeError) throw storeError;
-        dispatch(setStore(storeData));
-        if(userError) throw userError;
+
+        // Get selected store from localStorage
+        const selectedStore = JSON.parse(localStorage.getItem('selectedStore'));
+        if (!selectedStore) {
+            throw new Error('Please select a store first');
+        }
+
+        const { data: userData, error: userError } = await supabase
+            .from('user')
+            .select('*')
+            .eq('id', userid)
+            .single();
+
+        if (userError) throw userError;
         dispatch(setUserData(userData));
-        const {data:tableData,error:tableError}=await supabase
-        .from('table')
-        .select(`
-            *,
-            store:storeid (
-                id,
-                name,
-                companyid)`)
-        .eq('store.companyid',userData.companyid);
-        
-        if(tableError) throw tableError;
+
+        // Fetch tables only for the selected store
+        const { data: tableData, error: tableError } = await supabase
+            .from('table')
+            .select(`
+                *,
+                store:storeid (
+                    id,
+                    name,
+                    companyid
+                )
+            `)
+            .eq('storeid', selectedStore.id); // Filter by selected store ID
+
+        if (tableError) throw tableError;
         dispatch(setTables(tableData));
-    }catch(error){
+        dispatch(setStore([selectedStore])); // Update store in state
+
+    } catch (error) {
         dispatch(setError(error.message));
-        console.error('Error fetching table data:',error);
-    }finally{
+        console.error('Error fetching table data:', error);
+    } finally {
         dispatch(setLoading(false));
     }
 };
@@ -43,7 +50,7 @@ export const addTable = (tableData) => async (dispatch) => {
     try {
         dispatch(setLoading(true));
         dispatch(clearError());
-        
+
         if (!tableData.store) {
             throw new Error('Store ID is required');
         }
@@ -106,7 +113,8 @@ export const addTable = (tableData) => async (dispatch) => {
                 store:storeid (
                     id,
                     name,
-                    companyid)`)
+                    companyid
+                )`)
             .eq('storeid', tableData.store);
 
         if (fetchError) throw fetchError;

@@ -21,9 +21,6 @@ export default function OrderPage({ onUpdateStatus, isTakeaway = false, existing
     const user = useSelector((state) => state.auth.user);
     const [table, setTable] = useState(null);
 
-    // Add debug logging
-    console.log('OrderPage rendered:', { table });
-
     // Fetch items from Supabase
     const getItems = async () => {
         try {
@@ -244,12 +241,11 @@ export default function OrderPage({ onUpdateStatus, isTakeaway = false, existing
                     const { data: newOrder, error: orderError } = await supabase
                         .from('orders')
                         .insert({
-                            order_type: 'dine in',
+                            order_type: "dine in",
                             total_amount,
                             status: 'pending',
                             completed_at: new Date().toISOString(),
                             storeid: table.storeid,
-                            created_at: new Date().toLocaleDateString(),
                             userid: user.id,
                             tax,
                             receipt_no: receipt_no // Add receipt number to new order
